@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: sentinel_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - sentinel_net
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://sentinel:password@db:5432/sentinel_db
+      - TEST_SERVER_IP=test-server
+      - INTERFACE=eth0
+    depends_on:
+      - db
+      - test-server
+    # Needed for PyShark to sniff packets on the network bridge
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      - sentinel_net
+
+  test-server:
+    build: 
+      context: ./test-server
+    ports:
+      - "2222:22" # Mapping SSH to 2222 on host to avoid conflict
+      - "8080:80" # Mapping HTTP to 8080
+    networks:
+      - sentinel_net
+
+volumes:
+  postgres_data:
+
+networks:
+  sentinel_net:
+    driver: bridge

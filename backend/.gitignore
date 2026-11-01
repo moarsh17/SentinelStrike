@@ -1,0 +1,51 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Local SQLite databases & migrations
+*.db
+*.sqlite
+*.sqlite3
+sentinel.db
+sentinel.db-journal
+
+# Packet capture dumps & Wireshark captures
+*.pcap
+*.pcapng
+*.cap
+
+# Logs and databases
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Unit test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / IDE configuration
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System files
+.DS_Store
+Thumbs.db

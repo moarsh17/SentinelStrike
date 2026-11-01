@@ -1,0 +1,39 @@
+# =========================
+# Root Git Ignore - SentinelStrike
+# =========================
+
+# Python / Backend
+backend/.venv/
+backend/venv/
+backend/__pycache__/
+backend/*.db
+backend/*.sqlite3
+backend/sentinel.db
+backend/sentinel.db-journal
+backend/*.pcap
+backend/*.pcapng
+*.py[cod]
+__pycache__/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
