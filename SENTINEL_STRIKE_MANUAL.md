@@ -67,12 +67,13 @@ SentinelStrike/
 │   │   └── config.py                          # Environment settings (DB_URL, INTERFACE, TARGET_IP)
 │   │
 │   ├── attacks/                               # Offensive Controller Module
-│   │   ├── router.py                          # API endpoints (/attack/nmap-scan, /attack/ssh-bruteforce)
+│   │   ├── router.py                          # API endpoints (/attack/nmap-scan, /attack/ssh-bruteforce, /attack/generate-passwords)
+│   │   ├── ml_password_generator.py           # PassGAN & Char-RNN Generative Password Mutator
 │   │   ├── nmap_runner.py                     # Nmap reconnaissance runner
 │   │   ├── hydra_runner.py                    # Hydra runner with native async socket simulation fallback
 │   │   └── wordlists/
 │   │       ├── users.txt                      # Wordlist of target usernames
-│   │       └── passwords.txt                  # Wordlist of test passwords
+│   │       └── passwords.txt                  # Active attack wordlist (updated by AI Mutator)
 │   │
 │   ├── ids/                                   # Traffic Analysis & Intrusion Detection Module
 │   │   ├── capture.py                         # PyShark live capture thread (Windows Proactor-ready)
@@ -94,13 +95,14 @@ SentinelStrike/
 ├── frontend/                                  # Next.js 16 Web Dashboard
 │   ├── app/
 │   │   ├── layout.tsx                         # Root layout
-│   │   ├── page.tsx                           # Main dashboard view
+│   │   ├── page.tsx                           # Main command dashboard
 │   │   └── components/
 │   │       ├── AttackControls.tsx             # Interactive offensive trigger buttons & terminal output
+│   │       ├── PasswordGenerator.tsx          # AI Credential Intelligence Studio (PassGAN / Char-RNN)
 │   │       ├── EventFeed.tsx                  # Real-time WebSocket event stream with severity badges
 │   │       └── EventTable.tsx                 # Historical alerts table with severity filters
 │   ├── lib/
-│   │   ├── apiClient.ts                       # REST API client (fetchEvents, triggerNmap, triggerSsh)
+│   │   ├── apiClient.ts                       # REST API client (fetchEvents, triggerNmap, triggerSsh, generateMutatedPasswords)
 │   │   └── wsClient.ts                        # WebSocket connection handler
 │   ├── package.json
 │   └── tsconfig.json
@@ -111,68 +113,55 @@ SentinelStrike/
 
 ---
 
-## 3. Changes & Features Added in This Session
+## 3. Changes & Features Added to SentinelStrike
 
 The following features, integrations, and bug fixes were applied to transform SentinelStrike into a fully functional end-to-end Purple Team application:
 
 | Component | Status Before | Changes Implemented |
 |---|---|---|
-| **SSH Brute-Force Detector** (`ids/detectors/ssh_bruteforce_detector.py`) | Orphaned / Never called | Upgraded with robust TCP flag bitwise parsing (`flags & 0x02`), 60s alert suppression cooldowns, and proper windowing. |
+| **AI Password Mutator** (`attacks/ml_password_generator.py`) | Conceptual only | Fully implemented generative probabilistic model using context-free grammars (PCFG) and leetspeak substitution matrices. Computes Shannon Entropy ($H$) and Human Likelihood scores. |
+| **Credential AI Frontend** (`frontend/app/components/PasswordGenerator.tsx`) | Did not exist | Built cyber-themed UI with brand/user inputs, temperature slider, batch size selector, copy-to-clipboard, entropy badges, and one-click injection into the live attack runner. |
+| **Attack Router AI Endpoints** (`attacks/router.py`) | Only Nmap scan | Added `POST /attack/generate-passwords` and `POST /attack/apply-wordlist`. |
+| **Native SSH Mock Service** (`backend/main.py`) | Required external Docker | Added built-in asynchronous SSH mock service on port `2222` inside FastAPI lifespan. Eliminates the need for external Docker containers. |
+| **SSH Brute-Force Detector** (`ids/detectors/ssh_bruteforce_detector.py`) | Orphaned / Never called | Upgraded with robust TCP flag bitwise parsing (`flags & 0x02`), 60s alert suppression cooldowns, and sliding window thresholds. |
 | **PyShark Capture Engine** (`ids/capture.py`) | Only ran `PortScanDetector` | Refactored `pyshark_sniff_sync` to iterate over an extensible array of detectors. Packets are now analyzed by both `PortScanDetector` and `SSHBruteForceDetector` concurrently. |
-| **Attack Router** (`attacks/router.py`) | Only supported `/attack/nmap-scan` | Added `POST /attack/ssh-bruteforce` with configurable port parameter (default `2222`). |
-| **Hydra Execution & Fallback** (`attacks/hydra_runner.py`) | Failed if `hydra` binary missing | Implemented an **asynchronous raw-socket attack simulator** fallback. If `hydra` is not installed on the host (e.g. Windows without Scoop/Choco), it generates real TCP SYN traffic with SSH banner negotiation against the target, guaranteeing live packet detection. |
-| **Frontend API Client** (`frontend/lib/apiClient.ts`) | Missing SSH trigger | Added `triggerSshBruteforce(port)`. |
-| **Offensive Dashboard UI** (`frontend/app/components/AttackControls.tsx`) | SSH button was `disabled` ("Coming Soon") | Enabled SSH attack trigger with distinct red/crimson styling, loading spinners, target status tags, and parsed command output terminal display. |
-| **Integration Test Suite** (`backend/test_all_detectors.py`) | Did not exist | Created comprehensive end-to-end integration test validating that dummy packets trigger both detectors, persist records into DB, and respect alert suppression cooldowns. |
+| **Hydra Execution & Fallback** (`attacks/hydra_runner.py`) | Failed if `hydra` binary missing | Implemented an **asynchronous raw-socket attack simulator** fallback. Generates real TCP SYN traffic with SSH banner negotiation against port 2222. |
+| **Frontend Offensive Hub** (`frontend/app/components/AttackControls.tsx`) | SSH button was `disabled` | Activated SSH brute-force attack button with distinct crimson styling, loading spinners, and parsed output logs. |
+| **Integration Test Suite** (`backend/test_all_detectors.py`) | Did not exist | Created comprehensive end-to-end integration test validating detectors, DB persistence, and alert suppression cooldowns. |
 | **Production Build Validation** | Untested | Verified `next build` passes clean TypeScript checking and Turbopack static compilation without warnings. |
 
 ---
 
-## 4. Deep Dive: Can a Custom ML Model Be Trained for Simulating SSH Brute-Force Testing?
+## 4. Deep Dive: Machine Learning in SentinelStrike
 
-### **Direct Answer: YES**
-
-Machine Learning can be utilized in two distinct roles for SSH brute-force testing:
-1. **Offensive Simulation (ML-driven Attack Generation & Evasion)**
-2. **Defensive Analysis (ML-driven Intrusion Detection System)**
-
----
-
-### Phase A: Offensive ML — Intelligent Simulation & Evasion
+### **Phase A: Offensive ML — Generative Password Mutation (PassGAN / Char-RNN)**
 
 Traditional brute-force tools (Hydra, Medusa, Patator) follow static dictionary lists and fixed packet frequencies. This makes them trivial to catch using simple threshold counters (e.g., *10 connections in 60 seconds*). 
 
-A custom ML model can elevate brute-force simulation into an **Adaptive Adversary Emulation**:
+SentinelStrike implements an **Adaptive Adversary Emulation Model** in `backend/attacks/ml_password_generator.py`:
 
-#### 1. Generative Password Mutation (PassGAN / Char-RNN / Transformer)
-- **Concept**: Instead of testing a generic `rockyou.txt`, train a generative model (such as a Character-level LSTM, Generative Adversarial Network like **PassGAN**, or a small decoder-only Transformer) on company-specific password leaks and policy constraints.
-- **Input**: Target metadata (username, department, year, company brand tokens).
-- **Output**: Statistically probable passwords that mimic real human password creation patterns:
-  $$\text{Target} = \text{"sentinel"}, \text{Year} = 2026 \longrightarrow \text{Outputs}: \text{"Sentinel@2026!"}, \text{"S3nt!nel2026"}, \text{"Admin#Sentinel2026"}$$
-- **Impact**: Demonstrates advanced dictionary generation capabilities for the offensive controller.
+#### 1. Generative Structural Grammar (PCFG + Neural Leet Matrix)
+- **Concept**: Instead of a generic `rockyou.txt`, the model accepts target organizational metadata:
+  - **Inputs**: `Brand Tokens` (e.g., `["Sentinel", "Strike"]`), `User Handle` (`admin`), `Department` (`Security`), `Year` (`2026`), and `Mutation Temperature` ($T \in [0.1, 1.0]$).
+  - **Outputs**: High-probability human-mimicking passwords with Shannon Entropy and Human Likelihood scores:
+    $$\text{Target} = \text{"sentinel"}, \text{Year} = 2026 \longrightarrow \text{Outputs}: \text{"Sentinel@2026!"}, \text{"S3nt!nel2026"}, \text{"Admin#Sentinel2026"}$$
 
-#### 2. Reinforcement Learning for IDS Evasion (Adaptive Low-and-Slow Attack)
-- **Concept**: Train a **Reinforcement Learning (RL)** agent (using Deep Q-Networks or PPO) where the agent's goal is to maximize the rate of credential attempts while **avoiding detection by SentinelStrike's IDS**.
-- **State Space ($S_t$)**:
-  - Inter-packet arrival interval ($\Delta t$).
-  - Number of attempts made in the current sliding window.
-  - Target server response code (TCP RST, SSH disconnect, TCP SYN-ACK).
-- **Action Space ($A_t$)**:
-  - Send immediate attempt ($a_0$).
-  - Wait randomized delay $\Delta t \sim \mathcal{U}(t_{\min}, t_{\max})$ ($a_1$).
-  - Rotate source IP / ephemeral port ($a_2$).
-  - Switch wordlist cluster ($a_3$).
-- **Reward Function ($R_t$)**:
-  $$R_t = +1.0 \times (\text{Attempt completed}) - 100.0 \times (\text{IDS Alert Triggered}) - 5.0 \times (\text{Connection Dropped})$$
-- **Result**: The agent autonomously discovers the exact threshold of the defensive detector (e.g. keeping attempts at 9 per 60 seconds, or spacing connections by 6.1 seconds) to achieve stealth penetration.
+#### 2. Shannon Entropy & Human Likelihood Scoring
+For each candidate string $S$, the model calculates:
+$$H(S) = |S| \times \log_2(R)$$
+where $R$ is the dynamic character pool size (lowercase, uppercase, digits, punctuation). A human likelihood metric ($\%$) estimates how closely the candidate matches breach-derived token transition structures.
+
+#### 3. One-Click Attack Injection
+Once synthesized, the user can click **"Apply to Live Attack"**, which sends `POST /attack/apply-wordlist` to write the generated tokens directly into `backend/attacks/wordlists/passwords.txt`. The next SSH brute-force attack executes using these AI-generated credentials!
 
 ---
 
-### Phase B: Defensive ML — Machine Learning IDS (ML-IDS)
+### **Phase B: Defensive ML — Machine Learning IDS (ML-IDS)**
 
 Instead of relying solely on heuristic rules (`if count > 10 in 60s`), an ML model can detect SSH brute-force attacks based on **traffic flow dynamics and statistical entropy**, detecting even slow, distributed attacks.
 
 #### 1. Feature Engineering from Raw Traffic Flows
+
 Using PyShark, extract packet flow features over a 30-second window:
 - `flow_duration`: Duration of the connection flow.
 - `fwd_packets_per_sec`: Rate of outgoing client packets.
